@@ -6,7 +6,13 @@ from namedmutex import NamedMutex
 
 
 class SharedMemory(object):
-    def __init__(self, mem_name, mem_size, mem_type):
+    def __init__(self, mem_name, mem_size, mem_type=mmap.ACCESS_READ):
+        """
+        注意，初始化共享内存时，需要先建立ACCESS_WRITE实例，然后建立ACCESS_READ实例，否则会出错
+        :param mem_name: 共享内存命名
+        :param mem_size: 共享内存大小
+        :param mem_type: 共享内存类型(读、写)，由mmap.ACCESS_READ或mmap.ACCESS_WRITE定义
+        """
         self.mem_name = mem_name
         self.mem_size = mem_size
         self.shared_mem = mmap.mmap(fileno=0, length=mem_size, tagname=mem_name, access=mem_type)
