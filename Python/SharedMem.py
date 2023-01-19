@@ -3,6 +3,7 @@ import numpy as np
 import cv2
 import time
 from namedmutex import NamedMutex
+from ZEDCamera import ZEDCamera
 
 
 class SharedMemory(object):
@@ -64,13 +65,32 @@ class SharedMemory(object):
         return img_list
 
 
-if __name__ == '__main__':
+def test_with_images():
     img1 = cv2.imread("lena.jpg")
     img2 = cv2.imread("building.jpg")
     img = (img1, img2)
 
-    shmm = SharedMemory(mem_name="shared_memory1", mem_size=1024*1024*3*2, mem_type=mmap.ACCESS_WRITE)
-    img_idx = 0
+    shmm = SharedMemory(mem_name="shared_memory1", mem_size=1024 * 1024 * 3 * 2, mem_type=mmap.ACCESS_WRITE)
     while True:
         shmm.send_images(img)
         time.sleep(0.05)
+
+
+def test_with_ZED():
+    cameras = ZEDCamera.enum_cameras()
+    camera = ZEDCamera(cameras[0], resolution=720, camera_fps=30, depth_min=400, depth_max=5000)
+
+    shmm = SharedMemory(mem_name="shared_memory1", mem_size=1280 * 720 * 3 * 2 + 3 * 12, mem_type=mmap.ACCESS_WRITE)
+    print("Camera and shared memory ready")
+    while True:
+        camera.refresh()
+        img_left = camera.get_RGBimage()
+        img_right = camera.get_RGBimage_right()
+        images = (img_left, img_right)
+
+        shmm.send_images(images)
+        time.sleep(0.01)
+
+
+if __name__ == '__main__':
+    test_with_ZED()
