@@ -3,7 +3,7 @@ import mmap
 import cv2
 
 
-shmm = SharedMemory(mem_name="shared_memory1", mem_size=1280*720*3*2 + 3 * 12, mem_type=mmap.ACCESS_READ)
+shmm = SharedMemory(mem_name="shared_memory1", mem_size=1024 * 1024 * 3 * 2)
 while True:
     img_list = shmm.read_images()
     if len(img_list) >= 2:
