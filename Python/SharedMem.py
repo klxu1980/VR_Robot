@@ -8,7 +8,7 @@ from ZEDCamera import ZEDCamera
 
 
 class SharedMemory(object):
-    def __init__(self, mem_name, mem_size):
+    def __init__(self, mem_name, mem_size, encode_jpg=True):
         """
         :param mem_name: 共享内存命名
         :param mem_size: 共享内存大小
@@ -17,6 +17,7 @@ class SharedMemory(object):
         self.mem_size = mem_size
         self.shared_mem = mmap.mmap(fileno=0, length=mem_size, tagname=mem_name, access=mmap.ACCESS_DEFAULT)
         self.mutex = NamedMutex(mem_name + "_mutex")
+        self.encode_jpg = encode_jpg
 
     def __del__(self):
         self.shared_mem.close()
@@ -44,11 +45,11 @@ class SharedMemory(object):
         self.shared_mem.seek(begin)
         self.shared_mem.write(len(images).to_bytes(length=4, byteorder=sys.byteorder))
         for img in images:
-            success, bmp = cv2.imencode('.jpg', img)    # 将原始图像数据转码为bmp格式
+            format = '.jpg' if self.encode_jpg else '.bmp'
+            success, img_code = cv2.imencode(format, img)    # 将原始图像数据转码为编码形式
             if success:
-                img_bytes = bmp.tobytes()
-                img_length = len(img_bytes)  # 左眼图像数据字节数
-                len_bytes = img_length.to_bytes(4, byteorder=sys.byteorder)  # 转4字节数组
+                img_bytes = img_code.tobytes()       # 将编码转换为字节数组
+                len_bytes = len(img_bytes).to_bytes(4, byteorder=sys.byteorder)  # 编码长度
                 self.shared_mem.write(len_bytes)
                 self.shared_mem.write(img_bytes)
         self.mutex.release()
@@ -80,7 +81,6 @@ def test_with_images():
     print("Ready to write shared memory")
     while True:
         shmm.write_images(img)
-        print("Write once")
         time.sleep(0.05)
 
 
@@ -102,4 +102,4 @@ def test_with_ZED():
 
 
 if __name__ == '__main__':
-    test_with_ZED()
+    test_with_images()
