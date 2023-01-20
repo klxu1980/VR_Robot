@@ -44,9 +44,13 @@ class SharedMemory(object):
         self.shared_mem.seek(begin)
         self.shared_mem.write(len(images).to_bytes(length=4, byteorder=sys.byteorder))
         for img in images:
-            img_size = np.array(img.shape, dtype=np.int32)
-            self.shared_mem.write(img_size.tobytes())
-            self.shared_mem.write(img.tobytes())
+            success, bmp = cv2.imencode('.jpg', img)    # 将原始图像数据转码为bmp格式
+            if success:
+                img_bytes = bmp.tobytes()
+                img_length = len(img_bytes)  # 左眼图像数据字节数
+                len_bytes = img_length.to_bytes(4, byteorder=sys.byteorder)  # 转4字节数组
+                self.shared_mem.write(len_bytes)
+                self.shared_mem.write(img_bytes)
         self.mutex.release()
 
     def read_images(self, begin=0):
@@ -59,9 +63,9 @@ class SharedMemory(object):
         img_list = list()
         img_cnt = int.from_bytes(bytes=self.shared_mem.read(4), byteorder=sys.byteorder)
         for i in range(img_cnt):
-            img_shape = np.frombuffer(self.shared_mem.read(12), dtype=np.int32)
-            img_data = self.shared_mem.read(img_shape[0] * img_shape[1] * img_shape[2])
-            img = np.frombuffer(img_data, dtype=np.uint8).reshape(img_shape)
+            img_len = int.from_bytes(bytes=self.shared_mem.read(4), byteorder=sys.byteorder)
+            img_data = np.frombuffer(self.shared_mem.read(img_len), dtype=np.uint8)
+            img = cv2.imdecode(img_data, cv2.IMREAD_COLOR)
             img_list.append(img)
         self.mutex.release()
         return img_list
@@ -72,18 +76,19 @@ def test_with_images():
     img2 = cv2.imread("building.jpg")
     img = (img1, img2)
 
-    shmm = SharedMemory(mem_name="shared_memory1", mem_size=1024 * 1024 * 3 * 2)
+    shmm = SharedMemory(mem_name="ShareForUnity", mem_size=2208 * 1242 * 3 + 1024)
     print("Ready to write shared memory")
     while True:
         shmm.write_images(img)
+        print("Write once")
         time.sleep(0.05)
 
 
 def test_with_ZED():
     cameras = ZEDCamera.enum_cameras()
-    camera = ZEDCamera(cameras[0], resolution=720, camera_fps=30, depth_min=400, depth_max=5000)
+    camera = ZEDCamera(cameras[0], resolution=1080, camera_fps=15, depth_min=400, depth_max=5000)
 
-    shmm = SharedMemory(mem_name="shared_memory1", mem_size=1280 * 720 * 3 * 2 + 2 * 12 + 4)
+    shmm = SharedMemory(mem_name="ShareForUnity", mem_size=2208 * 1242 * 3 + 1024)
     print("Camera and shared memory ready")
     while True:
         camera.refresh()
@@ -92,8 +97,9 @@ def test_with_ZED():
         images = (img_left, img_right)
 
         shmm.write_images(images)
-        time.sleep(0.01)
+        # print("Write once")
+        # time.sleep(0.05)
 
 
 if __name__ == '__main__':
-    test_with_images()
+    test_with_ZED()

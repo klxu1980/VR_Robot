@@ -10,22 +10,11 @@ using System.Drawing.Imaging;
 
 namespace SharedMemTest
 {
-    class CImage
-    {
-        public int[] Shape;
-        public byte[] Buffer;
-        public CImage(int[] Shape, byte[] Buffer)
-        {
-            this.Shape = Shape;
-            this.Buffer = Buffer;
-        }
-    }
-
     class CSharedMemory
     {
         private MemoryMappedViewAccessor __viewAccessor;
         private Mutex __mutex;
-        public List<CImage> Images;
+        public List<byte[]> Images;
 
         public CSharedMemory(String MemName, int MemSize)
         {
@@ -33,40 +22,37 @@ namespace SharedMemTest
             __viewAccessor = mmf.CreateViewAccessor(0, MemSize);
             __mutex = new Mutex(false, MemName + "_mutex");
 
-            Images = new List<CImage>();
+            Images = new List<byte[]>();
         }
 
-        public void ReadImages(int Begin=0)
+        public void ReadImages(int Begin = 0)
         {
             int Offset = Begin;
             int[] ImgCnt = new int[1];
-            int[] ImgShape = new int[3];
+            int[] ImgSize = new int[1];
             Images.Clear();
 
             __mutex.WaitOne();
-            
+
             // 读取图像数量
             __viewAccessor.ReadArray<int>(Offset, ImgCnt, 0, 1);
-            Offset += 3;
+            Offset += 4;
 
             // 依次读取图像
-            for(int i = 0; i < ImgCnt[0]; ++i)
-            {                
-                __viewAccessor.ReadArray<int>(Offset, ImgShape, 0, 3);
-                int ImgSize = ImgShape[0] * ImgShape[1] * ImgShape[2];               
+            for (int i = 0; i < ImgCnt[0]; ++i)
+            {
+                __viewAccessor.ReadArray<int>(Offset, ImgSize, 0, 1);
 
-                byte[] ImgBuffer = new byte[ImgSize];
-                __viewAccessor.ReadArray<byte>(Offset + 12, ImgBuffer, 0, ImgSize);
+                byte[] ImgBuffer = new byte[ImgSize[0]];
+                __viewAccessor.ReadArray<byte>(Offset + 4, ImgBuffer, 0, ImgSize[0]);
 
-                Images.Add(new CImage(ImgShape, ImgBuffer));                
-                Offset += ImgSize + 12;
+                Images.Add(ImgBuffer);
+                Offset += ImgSize[0] + 4;
             }
             __mutex.ReleaseMutex();
-
-            Console.WriteLine(String.Format("Image count = {0}", Images.Count));
         }
 
-        public void WriteBytes(byte[] Data, int Begin=0)
+        public void WriteBytes(byte[] Data, int Begin = 0)
         {
             __mutex.WaitOne();
             __viewAccessor.WriteArray<byte>(Begin, Data, 0, Data.Length);

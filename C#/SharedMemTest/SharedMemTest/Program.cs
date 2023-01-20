@@ -11,7 +11,7 @@ namespace SharedMemTest
     {
         static void Main(string[] args)
         {
-            CSharedMemory mem = new CSharedMemory("shared_memory1", 1024 * 1024 * 3 * 2);
+            CSharedMemory mem = new CSharedMemory("ShareForUnity1", 2208 * 1242 * 3 + 256);
             while(true)
             {
                 mem.ReadImages();
