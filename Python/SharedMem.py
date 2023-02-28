@@ -3,6 +3,7 @@ import numpy as np
 import cv2
 import time
 import sys
+import struct
 from namedmutex import NamedMutex
 from ZEDCamera import ZEDCamera
 
@@ -17,7 +18,9 @@ class SharedMemory(object):
         self.mem_size = mem_size
         self.shared_mem = mmap.mmap(fileno=0, length=mem_size, tagname=mem_name, access=mmap.ACCESS_DEFAULT)
         self.mutex = NamedMutex(mem_name + "_mutex")
-        self.encode_jpg = encode_jpg
+
+        self.encode_jpg = encode_jpg     # 图像以jpg格式编码
+        self.head_hand_pos_gest = None   # 头盔、手柄位姿数据
 
     def __del__(self):
         self.shared_mem.close()
@@ -35,7 +38,7 @@ class SharedMemory(object):
         self.mutex.release()
         return data
 
-    def write_images(self, images, begin=0):
+    def write_images(self, images, begin=1024):
         """
         Write a list of images(raw BGR format) through shared memory.
         :param images: Image list
@@ -71,6 +74,19 @@ class SharedMemory(object):
         self.mutex.release()
         return img_list
 
+    @staticmethod
+    def __write_float(value, buffer, pos):
+        # 高位在前，低位在后
+        bytes = struct.pack("f", value)
+        buffer[pos] = bytes[0]
+        buffer[pos + 1] = bytes[1]
+        buffer[pos + 2] = bytes[2]
+        buffer[pos + 3] = bytes[3]
+
+    def read_pos_gesture(self):
+        bytes = self.read_bytes(byte_cnt=7 * 4 * 3)
+        self.head_hand_pos_gest = np.frombuffer(bytes, dtype=np.float32)
+
 
 def test_with_images():
     img1 = cv2.imread("lena.jpg")
@@ -86,20 +102,23 @@ def test_with_images():
 
 def test_with_ZED():
     cameras = ZEDCamera.enum_cameras()
-    camera = ZEDCamera(cameras[0], resolution=1080, camera_fps=15, depth_min=400, depth_max=5000)
+    camera = ZEDCamera(cameras[0], resolution=1080, camera_fps=30, depth_min=400, depth_max=5000)
 
     shmm = SharedMemory(mem_name="ShareForUnity", mem_size=2208 * 1242 * 3 + 1024)
     print("Camera and shared memory ready")
     while True:
+        # 更新相机图像
         camera.refresh()
         img_left = camera.get_RGBimage()
         img_right = camera.get_RGBimage_right()
         images = (img_left, img_right)
 
+        # 将图像写入共享内存，从共享内存中读取头盔、手柄位姿数据
         shmm.write_images(images)
-        # print("Write once")
-        # time.sleep(0.05)
+        shmm.read_pos_gesture()
+        print(shmm.head_hand_pos_gest)
 
 
 if __name__ == '__main__':
-    test_with_images()
+    # test_with_images()
+    test_with_ZED()
