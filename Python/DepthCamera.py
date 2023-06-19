@@ -11,9 +11,7 @@ class DepthCamera(object):
         self.resolution = resolution
         self.cam_params = None
         self._RGBimage = None
-        self._Xmap = None
-        self._Ymap = None
-        self._Zmap = None
+        self._point_cloud = None
         self.ROI = None
         self.timestamp = time.time()
         self.rot_angle = 0    # 图像有可能需要旋转90°、180°、270°

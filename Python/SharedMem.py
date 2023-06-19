@@ -19,8 +19,19 @@ class SharedMemory(object):
         self.shared_mem = mmap.mmap(fileno=0, length=mem_size, tagname=mem_name, access=mmap.ACCESS_DEFAULT)
         self.mutex = NamedMutex(mem_name + "_mutex")
 
-        self.encode_jpg = encode_jpg     # 图像以jpg格式编码
-        self.head_hand_pos_gest = None   # 头盔、手柄位姿数据
+        # 图像以jpg格式编码
+        self.encode_jpg = encode_jpg
+
+        # 头部、左右手柄位姿
+        self.head_pos = None
+        self.head_quaternion = None
+        self.head_euler = None
+        self.lHand_pos = None
+        self.lHand_quaternion = None
+        self.lHand_euler = None
+        self.rHand_pos = None
+        self.rHand_quaternion = None
+        self.rHand_euler = None
 
     def __del__(self):
         self.shared_mem.close()
@@ -84,8 +95,27 @@ class SharedMemory(object):
         buffer[pos + 3] = bytes[3]
 
     def read_pos_gesture(self):
-        bytes = self.read_bytes(byte_cnt=7 * 4 * 3)
-        self.head_hand_pos_gest = np.frombuffer(bytes, dtype=np.float32)
+        # 注意：应该在这里完成左手系到右手系的变换
+        T_pos = np.array([[1, 0, 0], [0, -1, 0], [0, 0, 1]])
+        T_rotate = np.array([[-1, 0, 0], [0, 1, 0], [0, 0, -1]])
+
+        bytes = self.read_bytes(byte_cnt=10 * 4 * 3)
+        head_hand_pos_gest = np.frombuffer(bytes, dtype='float32')
+
+        # 头部位姿
+        self.head_pos = np.dot(T_pos, head_hand_pos_gest[0:3])
+        self.head_quaternion = head_hand_pos_gest[3:7]          # 四元数没有做右手系转换！！
+        self.head_euler = np.dot(T_rotate, head_hand_pos_gest[7:10])
+
+        # 左手位姿
+        self.lHand_pos = np.dot(T_pos, head_hand_pos_gest[10:13])
+        self.lHand_quaternion = head_hand_pos_gest[13:17]       # 四元数没有做右手系转换！！
+        self.lHand_euler = np.dot(T_rotate, head_hand_pos_gest[17:20])
+
+        # 右手位姿
+        self.rHand_pos = np.dot(T_pos, head_hand_pos_gest[20:23])
+        self.rHand_quaternion = head_hand_pos_gest[23:27]
+        self.rHand_euler = np.dot(T_rotate, head_hand_pos_gest[27:])
 
 
 def test_with_images():
