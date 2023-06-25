@@ -166,21 +166,9 @@ class ZEDCamera(DepthCamera):
         return img
 
     def get_point_cloud(self):
-        if self._point_cloud is None:
+        if self._Zmap is None:
             self.camera.retrieve_measure(self.point_cloud, sl.MEASURE.XYZ)
             self._point_cloud = self.point_cloud.get_data()[:, :, 0:3]
-
-            """
-            if int(self.rot_angle / 90):
-                self._Xmap = np.rot90(self._Xmap, int(self.rot_angle / 90))
-                self._Ymap = np.rot90(self._Ymap, int(self.rot_angle / 90))
-                self._Zmap = np.rot90(self._Zmap, int(self.rot_angle / 90))
-            if self.flipud:
-                self._Xmap = np.flipud(self._Xmap)
-                self._Ymap = np.flipud(self._Ymap)
-                self._Zmap = np.flipud(self._Zmap)
-        cloud_map = np.array([self._Xmap, self._Ymap, self._Zmap])
-        """
         return self._point_cloud
 
     def get_XYZ_ROI(self, ROI=None):

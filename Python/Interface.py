@@ -130,7 +130,7 @@ class Interface(object):
             # 将处理结果图像和相机图像结合
             begin_time = time.perf_counter()
             img_l = cv2.addWeighted(self.cam_image_l, 1, self.proc_image_l, self.proc_image_alpha, gamma=1)
-            img_r = cv2.addWeighted(self.cam_image_l, 1, self.proc_image_r, self.proc_image_alpha, gamma=1)
+            img_r = cv2.addWeighted(self.cam_image_r, 1, self.proc_image_r, self.proc_image_alpha, gamma=1)
             self.shmm.write_images(images=[img_l, img_r])
             write_img_time = self.proc_time(begin_time)
 
