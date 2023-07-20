@@ -4,6 +4,8 @@ import cv2
 import time
 import math
 from Interface import Interface
+from BasicMath import *
+from TransMatrix import Trans_Camera_VR
 
 
 class VirtualBeam(object):
@@ -39,31 +41,11 @@ class VirtualBeam(object):
         self.beam_size = 10
 
     @staticmethod
-    def __eulerAngles2rotationMat(euler):
-        """
-        Calculates Rotation Matrix given euler angles. Angles are defined by degree.
-        :param euler: 1-by-3 list [rx, ry, rz] angle in degree
-        :return:
-        RYP角，是ZXY欧拉角，依次绕定轴ZXY转动[rx, ry, rz]
-        """
-        euler = [degree * math.pi / 180.0 for degree in euler]
-        R_x = np.array([[1, 0, 0],
-                        [0, math.cos(euler[0]), -math.sin(euler[0])],
-                        [0, math.sin(euler[0]), math.cos(euler[0])]])
-        R_y = np.array([[math.cos(euler[1]), 0, math.sin(euler[1])],
-                        [0, 1, 0],
-                        [-math.sin(euler[1]), 0, math.cos(euler[1])]])
-        R_z = np.array([[math.cos(euler[2]), -math.sin(euler[2]), 0],
-                        [math.sin(euler[2]), math.cos(euler[2]), 0],
-                        [0, 0, 1]])
-        return np.dot(R_z, np.dot(R_x, R_y))
-
-    @staticmethod
     def find_beam_end_uv(pos, r_mat, point_cloud, sigma):
         """
         根据直线方程计算虚拟直线透射到uv坐标系的区域
-        :param pos: 手柄相对头盔的位置坐标
-        :param rot_mat: 手柄的旋转矩阵
+        :param pos: 手柄在相机坐标系中的坐标
+        :param r_mat: 手柄在相机坐标系中的旋转矩阵
         :param point_cloud: 相机点云
         :param sigma: 标准差范围，反应在投射区域大小
         :return: 投射区域的uv坐标
@@ -112,14 +94,31 @@ class VirtualBeam(object):
 
         return uv_l, uv_r
 
-    def draw_handle_beam(self, pos, euler, point_cloud, img_l, img_r):
-        # 计算手柄原点和X,Y,Z方向在左右图像中的像素位置
-        r_mat = self.__eulerAngles2rotationMat(euler)
-        xyz = np.dot(r_mat, np.eye(3) * self.handle_len).T + pos
-        xyz = np.append(xyz, pos.reshape(1, 3), axis=0)
+    def draw_handle_beam(self, pos, euler, g_cam, point_cloud, img_l, img_r):
+        """
+        绘制手柄位置和虚拟光束
+        :param pos: VR头盔、右手柄、左手柄在VR坐标系中的位置
+        :param euler: VR头盔、右手柄、左手柄在VR坐标系中的姿态
+        :param g_cam: 相机坐标系中的重力向量
+        :param point_cloud: 双目相机点云图
+        :param img_l: 相机左眼RGB图像
+        :param img_r: 相机右眼RGB图像
+        :return:
+        """
+        # 获取旋转平移矩阵
+        trans_cam_vr = Trans_Camera_VR(pos, euler, g_cam)
+        r_handle2cam = trans_cam_vr.r_handle2cam
+
+        # 计算手柄原点和X,Y,Z方向在相机坐标系的位置
+        xyz = np.array([[1, 0, 0, 1],
+                        [0, 1, 0, 1],
+                        [0, 0, 1, 1],
+                        [0, 0, 0, 1]], dtype=np.float32)
+        xyz[:3, :3] *= self.handle_len
+        xyz = np.dot(r_handle2cam, xyz.T).T[:, :3]
 
         # 计算虚拟光束末端的三维坐标
-        beam_ends = self.find_beam_end_uv(pos, r_mat, point_cloud, self.beam_std)
+        beam_ends = self.find_beam_end_uv(xyz[3], r_handle2cam[:3, :3], point_cloud, self.beam_std)
         if beam_ends is not None and beam_ends[0].size != 0:  # 如果虚拟直线投射在uv坐标系中
             beam_uv = (np.median(beam_ends[0]).astype(np.int32), np.median(beam_ends[1]).astype(np.int32))
             end_point = point_cloud[beam_uv[0], beam_uv[1], :]  # 光线末端三维坐标
@@ -158,12 +157,14 @@ class BeamTestInterface(Interface):
         # 获取头部和手柄位姿
         self.shmm.read_pos_gesture()
 
-        # 右手相对头部位置
-        rHand_head = np.subtract(self.shmm.rHand_pos, self.shmm.head_pos)
+        # 头盔和手柄在vr坐标系中的位姿
+        pos = (self.shmm.head_pos, self.shmm.rHand_pos, self.shmm.lHand_pos)
+        euler = (self.shmm.head_euler, self.shmm.rHand_euler, self.shmm.lHand_euler)
 
         # 手柄位置在VR中的显示
-        self.virtual_beam.draw_handle_beam(pos=rHand_head, euler=self.shmm.rHand_euler, point_cloud=self.point_cloud,
-                                           img_l=self.proc_image_l, img_r=self.proc_image_r)
+        self.virtual_beam.draw_handle_beam(pos=pos, euler=euler, point_cloud=self.point_cloud,
+                                           g_cam=self.cam_acc, img_l=self.proc_image_l,
+                                           img_r=self.proc_image_r)
 
 
 if __name__ == '__main__':

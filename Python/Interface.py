@@ -15,6 +15,7 @@ class CameraThread(threading.Thread):
         self.img_left = None
         self.img_right = None
         self.point_cloud = None
+        self.acceleration = None
         self.__event_cam_read = threading.Event()
         self.__event_get_frame = threading.Event()
         self.__terminated = False
@@ -33,6 +34,7 @@ class CameraThread(threading.Thread):
                 self.img_left = self.camera.get_RGBimage()
                 self.img_right = self.camera.get_RGBimage_right()
                 self.point_cloud = self.camera.get_point_cloud()
+                self.acceleration = self.camera.get_acceleration()
                 self.frame_time = int((time.perf_counter() - begin_time) * 1000)
 
                 # 通知外部调用者读取更新后的数据
@@ -45,7 +47,8 @@ class CameraThread(threading.Thread):
             img_left = self.img_left.copy()
             img_right = self.img_right.copy()
             point_cloud = self.point_cloud.copy()
-            data = (img_left, img_right, point_cloud, self.frame_time)
+            acceleration = self.acceleration.copy()
+            data = (img_left, img_right, point_cloud, acceleration, self.frame_time)
             self.__event_cam_read.set()
             return data
         else:
@@ -77,6 +80,7 @@ class Interface(object):
         self.cam_image_l = None
         self.cam_image_r = None
         self.point_cloud = None
+        self.cam_acc = None
 
         # 用于叠加到实际图像上的显示画面
         self.proc_image_l = None
@@ -117,7 +121,8 @@ class Interface(object):
             self.cam_image_l = data[0]
             self.cam_image_r = data[1]
             self.point_cloud = data[2]
-            camera_time = data[3]
+            self.cam_acc = data[3]
+            camera_time = data[4]
             read_frame_time = self.proc_time(begin_time)
 
             # 处理数据，绘制处理结果图像

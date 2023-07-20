@@ -97,15 +97,17 @@ class ZEDCamera(DepthCamera):
                            calibration_params.right_cam.cx,
                            calibration_params.right_cam.cy)
         # 相机左眼到右眼的旋转平移矩阵(3*4)
-        self.transform_mat = np.dot(calibration_params.stereo_transform.m[0:3, :], np.array([[1, 0, 0, 0],
-                                                                                            [0, 1, 0, 0],
-                                                                                            [0, 0, 1, 0],
-                                                                                            [0, 0, 0, -1]]))
+        self.transform_mat = np.linalg.inv(calibration_params.stereo_transform.m)[0:3, :]
 
         # 创建Mat对象，用于获取图像
         self.left_image = sl.Mat()
         self.right_image = sl.Mat()
         self.point_cloud = sl.Mat()
+
+        # 处理不同传感器的时间戳以了解它是新的sensors_data还是旧的sensors _ data
+        self.t_imu = sl.Timestamp()
+        self.t_baro = sl.Timestamp()
+        self.t_mag = sl.Timestamp()
 
     def camera_identity(self):
         return str(self.camera_number)
@@ -174,6 +176,21 @@ class ZEDCamera(DepthCamera):
     def get_XYZ_ROI(self, ROI=None):
         self.get_point_cloud()
         return DepthCamera.get_XYZ_ROI(self, ROI)
+
+    def get_acceleration(self):
+        sensors_data = sl.SensorsData()
+        if self.camera.get_sensors_data(sensors_data, sl.TIME_REFERENCE.CURRENT) == sl.ERROR_CODE.SUCCESS:
+            # Check if the data has been updated since the last time
+            # IMU is the sensor with the highest rate
+            imu_data = sensors_data.get_imu_data()
+            if imu_data.timestamp.get_microseconds() > self.t_imu.get_microseconds():
+                acceleration = imu_data.get_linear_acceleration()
+                # 将加速度向量由IMU坐标系转换到相机三维视景坐标系中
+                trans = np.array([[-1, 0, 0],
+                                  [0, -1, 0],
+                                  [0, 0, 1]])
+                acceleration = np.dot(trans, acceleration)
+                return acceleration
 
 
 if __name__ == '__main__':
